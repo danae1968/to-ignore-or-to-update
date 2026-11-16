@@ -1,0 +1,10 @@
+# Store text files with LF line endings in the repository, whatever the
+# operating system; Git converts them on checkout where needed.
+* text=auto
+
+# Binary files: never convert
+*.mat   binary
+*.RData binary
+*.jasp  binary
+*.xlsx  binary
+*.xls   binary

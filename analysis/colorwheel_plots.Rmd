@@ -1,0 +1,870 @@
+---
+title: "colorwheel_plots"
+author: "Danae Papadopetraki"
+date: "October 18, 2021"
+output: html_document
+---
+
+```{r setup}
+rm(list=ls())
+
+
+# project folder = parent of the analysis folder that contains this file
+input <- knitr::current_input(dir = TRUE)
+analysis_dir <- if (is.null(input)) getwd() else dirname(input)
+projectDir <- dirname(normalizePath(analysis_dir))
+
+## Install packages if needed
+packages <- c("ggplot2", "dplyr", "plyr", "cowplot", "rmarkdown", 'ggpubr', 'Rmisc',
+              "readr", 'tidyverse' ,'reshape2', 'effectsize', 'rstatix', 'afex')
+
+if (length(setdiff(packages, rownames(installed.packages()))) > 0) {
+  install.packages(setdiff(packages, rownames(installed.packages())))  
+}
+
+# call packages
+lapply(packages, library, character.only = TRUE)
+
+# modeling type
+mod_type <- 'fmin'
+# mod_type <- 'vba'  # for the exploratory VBA models
+
+## Directories
+code_dir <- file.path(projectDir, 'analysis')
+results_dir <- file.path(projectDir, 'derivatives')
+exp1 <- file.path(results_dir, 'Experiment1')
+exp2 <- file.path(results_dir, 'Experiment2')
+pool_dir <- file.path(results_dir,'Pooled')
+
+if (mod_type == 'fmin'){
+  sim_dir <- file.path(pool_dir,'simulations') 
+}else{
+sim_dir <- file.path(pool_dir,'simulations_vba')}
+
+source(file.path(code_dir,'corPlot.R'))
+source(file.path(code_dir,'confMatrix.R'))
+
+```
+performance:deviance
+```{r deviance plots}
+devdir1 <- read.csv(file = file.path(exp1, 'Colorwheel', 'MedianAccOut.csv'))
+devdir1$experiment <- 1
+devdir1$subNo <- devdir1$subNo + 100
+devdir2 <- read.csv(file = file.path(exp2, 'Colorwheel', 'MedianAccOut.csv'))
+devdir2$experiment <- 2
+
+devdir <- rbind(devdir1,devdir2)
+
+#long format
+dev_long <- devdir %>% pivot_longer(cols = matches("^[IU][1-4]$"), 
+    names_to = c("condition", "setSize"), names_pattern = "^(I|U)([1-4])$", values_to = "deviance")
+
+##make summary statistics
+AccS=Rmisc::summarySEwithin(dev_long, measurevar="deviance", withinvars=c("setSize","condition"), betweenvars = 'experiment', idvar="subNo")
+
+# repeated measures ANOVA
+ dev_1 <- dev_long %>% filter(experiment ==1)
+
+# repeated-measures ANOVA experiment 1
+aov_model_1 <- aov_car(deviance ~ setSize * condition + Error(subNo/(setSize * condition)), 
+                     data = dev_1, type = 3)
+
+# Get the ANOVA table
+print(aov_model_1)
+
+# Get effect sizes
+effect_sizes_1 <- effectsize::eta_squared(aov_model_1, partial = TRUE)
+print(effect_sizes_1)
+
+# repeated-measures ANOVA experiment 2
+dev_2 <- dev_long %>% filter(experiment == 2)
+
+aov_model_2 <- aov_car(deviance ~ setSize * condition + Error(subNo/(setSize * condition)), 
+                     data = dev_2, type = 3)
+
+# Get the ANOVA table
+print(aov_model_2)
+
+# Get effect sizes
+effect_sizes_2 <- effectsize::eta_squared(aov_model_2, partial = TRUE)
+print(effect_sizes_2)
+
+## deviance linegraph + data points
+graph1=ggplot(AccS, aes(x = as.numeric(setSize), y = deviance, color= condition,shape=condition)) + 
+    geom_point(aes(shape=condition),position = position_dodge( w =0.15),size=3,alpha=0.7)+geom_line(aes(group = condition),position = position_dodge( w =0.15),size=1.5) + scale_shape_manual(values=c(15,16),name="Condition",labels=c("Ignore", "Update"))+ 
+    geom_errorbar(aes(ymin=deviance-se, ymax=deviance+se), width = 0.12,position = position_dodge( w =0.15),size=0.95)+
+    scale_color_manual(labels=c("Ignore", "Update"),name="Condition",values = c('#004CBF',"#E90066" ))
+
+graph1+ theme_classic2()+ theme(legend.position = "none") +
+    theme(axis.line = element_line(colour = 'dark grey', size = 1),
+          text = element_text(size=15),axis.text =element_text(colour='#4D4E4F',size=20,face='bold'))+
+    labs(x = "Set size", y = "Reaction time (seconds)")+ coord_cartesian(ylim=c(0, 30)) + theme(axis.title=element_blank())+
+    theme(axis.line=element_blank(),text = element_text(size=15))+ 
+    theme(axis.ticks.length = unit(.3, "cm"))+theme(aspect.ratio=0.9)+
+    geom_point(data=dev_long,aes(x= as.numeric(setSize), y = deviance, color = condition),position=position_jitterdodge(jitter.width = 0.4, jitter.height=0.01, dodge.width=0.3),size=3.5,shape=1,alpha=0.3)+facet_wrap(~experiment)
+
+
+```
+performance:reaction times
+```{r Performance: RTs}
+
+rtdir1 <- read.csv(file = file.path(exp1, 'Colorwheel', 'MedianRTOut.csv'))
+rtdir1$experiment <- 1
+rtdir1$subNo <- rtdir1$subNo + 100
+rtdir2 <- read.csv(file = file.path(exp2, 'Colorwheel', 'MedianRTOut.csv'))
+rtdir2$experiment <- 2
+
+rtdir <- rbind(rtdir1,rtdir2)
+
+#long format
+rt_long <- rtdir %>% pivot_longer(cols = matches("^[IU][1-4]$"), 
+    names_to = c("condition", "setSize"), names_pattern = "^(I|U)([1-4])$", values_to = "rt")
+
+##make summary statistics
+RTS=Rmisc::summarySEwithin(rt_long, measurevar="rt", withinvars=c("setSize","condition"), betweenvars = 'experiment', idvar="subNo")
+
+# repeated measures ANOVA
+ rt_1 <- rt_long %>% filter(experiment ==1)
+
+# repeated-measures ANOVA experiment 1
+aov_model_1 <- aov_car(rt ~ setSize * condition + Error(subNo/(setSize * condition)), 
+                     data = rt_1, type = 3)
+
+# Get the ANOVA table
+print(aov_model_1)
+
+# Get effect sizes
+effect_sizes_1 <- effectsize::eta_squared(aov_model_1, partial = TRUE)
+print(effect_sizes_1)
+
+# repeated-measures ANOVA experiment 2
+rt_2 <- rt_long %>% filter(experiment == 2)
+
+aov_model_2 <- aov_car(rt ~ setSize * condition + Error(subNo/(setSize * condition)), 
+                     data = rt_2, type = 3)
+
+# Get the ANOVA table
+print(aov_model_2)
+
+# Get effect sizes
+effect_sizes_2 <- effectsize::eta_squared(aov_model_2, partial = TRUE)
+print(effect_sizes_2)
+## rt plot
+
+## rt linegraph + data points
+graph1=ggplot(RTS, aes(x = as.numeric(setSize), y = rt, color= condition,shape=condition)) + 
+    geom_point(aes(shape=condition),position=position_dodge(w=0.15),size=3,alpha=0.7)+geom_line(aes(group = condition),position=position_dodge(w=0.15),size=1.5) + scale_shape_manual(values=c(15,16),name="Condition",labels=c("Ignore", "Update"))+ 
+    geom_errorbar(aes(ymin=rt-se, ymax=rt+se), width = 0.12,position=position_dodge(w=0.15),size=0.95)+
+    scale_color_manual(labels=c("Ignore", "Update"),name="Condition",values = c('#004CBF',"#E90066" ))
+
+graph1+ theme_classic2()+ theme(legend.position = "none") +
+    theme(axis.line = element_line(colour = 'dark grey', size = 1),
+          text = element_text(size=15),axis.text =element_text(colour='#4D4E4F',size=20,face='bold'))+
+    labs(x = "Set size", y = "Reaction time (seconds)")+ coord_cartesian(ylim=c(0,3)) + theme(axis.title=element_blank())+
+    theme(axis.line=element_blank(),text = element_text(size=15))+ 
+    theme(axis.ticks.length = unit(.3, "cm"))+theme(aspect.ratio=0.9)+
+    geom_point(data=rt_long,aes(x= as.numeric(setSize), y = rt, color = condition),position=position_jitterdodge(jitter.width = 0.4, jitter.height=0.01, dodge.width=0.3),size=3.5,shape=1,alpha=0.3)+facet_wrap(~experiment)
+
+
+
+```
+motivation: effort vs no effort
+```{r}
+
+ipnr1 <- read.csv(file = file.path(exp1, 'COGED', 'IPmatrixOut.csv'))
+ipnr1$experiment <- 1
+ipnr1$subNo <- ipnr1$subNo + 100
+ipnr2 <- read.csv(file = file.path(exp2, 'COGED', 'IPmatrixOut.csv'))
+ipnr2$experiment <- 2
+
+ipnr <- rbind(ipnr1,ipnr2)
+
+#long format
+ip_long <- ipnr %>% pivot_longer(cols = matches("^[IU][1-4]$"), 
+    names_to = c("condition", "setSize"), names_pattern = "^(I|U)([1-4])$", values_to = "ip")
+
+##make summary statistics
+IPS_1 =Rmisc::summarySEwithin(ip_long %>% dplyr::filter(experiment == 1), measurevar="ip", withinvars=c("setSize","condition"), betweenvars = 'experiment', idvar="subNo")
+IPS_2 =Rmisc::summarySEwithin(ip_long %>% dplyr::filter(experiment == 2), measurevar="ip", withinvars=c("setSize","condition"), betweenvars = 'experiment', idvar="subNo")
+
+# repeated measures ANOVA
+ ip_1 <- ip_long %>% filter(experiment ==1)
+
+
+# repeated-measures ANOVA experiment 1
+aov_model_1 <- aov_car(ip ~ setSize * condition + Error(subNo/(setSize * condition)), 
+                     data = ip_1, type = 3)
+
+# Get the ANOVA table
+print(aov_model_1)
+
+# Get effect sizes
+effect_sizes_1 <- effectsize::eta_squared(aov_model_1, partial = TRUE)
+print(effect_sizes_1)
+
+# repeated-measures ANOVA experiment 2
+ip_2 <- ip_long %>% filter(experiment == 2)
+
+aov_model_2 <- aov_car(ip ~ setSize * condition + Error(subNo/(setSize * condition)), 
+                     data = ip_2, type = 3)
+
+# Get the ANOVA table
+print(aov_model_2)
+
+# Get effect sizes
+effect_sizes_2 <- effectsize::eta_squared(aov_model_2, partial = TRUE)
+print(effect_sizes_2)
+## ip plot
+
+
+pd=position_dodge(w=0.15)
+
+
+#original
+graph3=ggplot(IPS_1, aes(x = as.numeric(setSize), y = ip, color= condition,shape=condition)) + 
+    geom_point(aes(shape=condition),position=position_dodge(w=0.15),size=3,alpha=0.7)+geom_line(aes(group = condition),position=position_dodge(w=0.15),size=1.5) + scale_shape_manual(values=c(15,16),name="Condition",labels=c("Ignore", "Update"))+  labs(x = "Set size", y = "Reaction time (seconds)")+
+    geom_errorbar(aes(ymin=ip-se, ymax=ip+se), width = 0.12,position=position_dodge(w=0.15),size=0.95)+
+    scale_color_manual(labels=c("Ignore", "Update"),name="Condition",values = c('#004CBF',"#E90066" ))+ theme_classic()+ theme(legend.position = "none") +
+    geom_segment(x=1,xend=4.01,y=-0.1,yend=-0.1,color='black',size=0.73)+geom_segment(x=0.49,xend=0.49,y=0,yend=2.202,color='black',size=0.79)+
+    theme(axis.line = element_line(colour = 'dark grey', size = 1), axis.title = element_text(size = 23, face = "bold",colour='#4D4E4F'),
+          text = element_text(size=15),axis.text =element_text(colour='#4D4E4F',size=20,face='bold'))+
+    coord_cartesian(ylim=c(0,2.2)) +
+    theme(axis.line=element_blank(),text = element_text(size=15))+ 
+    theme(axis.ticks.length = unit(.3, "cm"))+theme(aspect.ratio=0.9)+
+    geom_point(data=ip_1,aes(x= as.numeric(setSize), y = ip, color = condition),position=position_jitterdodge(jitter.width = 0.4, jitter.height=0.01, dodge.width=0.3),size=3.5,shape=1,alpha=0.3)
+
+
+
+print(graph3)
+
+ggsave(file.path(file.path(exp1, 'COGED', "oriIP.pdf")), height=7.5,width=8.5)
+dev.off()
+
+#replication
+
+graph4=ggplot(IPS_2, aes(x = as.numeric(setSize), y = ip, color= condition,shape=condition)) + 
+    geom_point(aes(shape=condition),position=position_dodge(w=0.15),size=3,alpha=0.7)+geom_line(aes(group = condition),position=position_dodge(w=0.15),size=1.5) + scale_shape_manual(values=c(15,16),name="Condition",labels=c("Ignore", "Update"))+  labs(x = "Set size", y = "Reaction time (seconds)")+
+    geom_errorbar(aes(ymin=ip-se, ymax=ip+se), width = 0.12,position=position_dodge(w=0.15),size=0.95)+
+    scale_color_manual(labels=c("Ignore", "Update"),name="Condition",values = c('#004CBF',"#E90066" ))+ theme_classic()+ theme(legend.position = "none") +
+    geom_segment(x=1,xend=4.01,y=-0.1,yend=-0.1,color='black',size=0.73)+geom_segment(x=0.49,xend=0.49,y=0,yend=2.202,color='black',size=0.79)+
+    theme(axis.line = element_line(colour = 'dark grey', size = 1), axis.title = element_text(size = 23, face = "bold",colour='#4D4E4F'),
+          text = element_text(size=15),axis.text =element_text(colour='#4D4E4F',size=20,face='bold'))+
+    coord_cartesian(ylim=c(0,2.2)) +
+    theme(axis.line=element_blank(),text = element_text(size=15))+ 
+    theme(axis.ticks.length = unit(.3, "cm"))+theme(aspect.ratio=0.9)+
+    geom_point(data=ip_2,aes(x= as.numeric(setSize), y = ip, color = condition),position=position_jitterdodge(jitter.width = 0.4, jitter.height=0.01, dodge.width=0.3),size=3.5,shape=1,alpha=0.3)
+
+
+print(graph4)
+
+ggsave(file.path(exp2, 'COGED', "repIP.pdf"), height=7.5,width=8.5)
+dev.off()
+```
+
+motivation: ignore vs update
+```{r direct comparison}
+ipdir1 <- read.csv(file = file.path(exp1, 'COGED', 'IPDirectOut.csv'))
+ipdir1$subNo <- ipdir1$subNo + 100
+
+dataLong <- reshape(ipdir1,varying =c( "IP1","IP2","IP3","IP4"),direction = "long",idvar = "subNo",timevar="setSize",sep="")
+dir_long_1 <- reshape2:::melt.data.frame(dataLong,id.vars=c('subNo','setSize'),value.name="ip")
+dirS1 <- summarySEwithin(dir_long_1, measurevar="ip", withinvars=c("setSize"),idvar="subNo")
+
+ipdir2 <- read.csv(file = file.path(exp2, 'COGED', 'IPDirectOut.csv'))
+
+dataLong <- reshape(ipdir2,varying =c( "IP1","IP2","IP3","IP4"),direction = "long",idvar = "subNo",timevar="setSize",sep="")
+dir_long_2 <- reshape2:::melt.data.frame(dataLong,id.vars=c('subNo','setSize'),value.name="ip")
+
+# exclude participant 30 of experiment 2, who responded randomly in the ignore vs update choices
+dir_long_2_ex <- dir_long_2 %>% dplyr::filter(subNo != 30)
+
+dirS2 <- summarySEwithin(dir_long_2_ex, measurevar="ip", withinvars=c("setSize"),idvar="subNo")
+
+
+#line plot  with raw data
+pd=position_dodge(w=0.14)
+pj=position_jitter(w=0.1,h=0.01)
+graph3=ggplot(dirS1, aes(x = as.factor(setSize), y = ip, group=1)) + 
+  geom_line(size=1, colour='darkgreen')+geom_errorbar(aes(ymin=ip-se, ymax=ip+se), width = 0.06,size=0.95,colour='black')+#geom_point(size=2,colour='black',fill='white',shape=21,stroke=1.5)+
+theme_classic() +
+  geom_point(data=dir_long_1,aes(setSize,ip),position=pj,size=2.5,shape=1,alpha=0.3,colour='black')+   
+  geom_hline(aes(yintercept = 2),linetype='dashed',color='grey')+
+  geom_segment(x=1,xend=4.01,y=-0.2,yend=-0.2,color='black',size=0.73)+geom_segment(x=0.402,xend=0.402,y=0,yend=4,color='black',size=0.65)+
+      theme(axis.line = element_line(colour = 'dark grey', size = 1), axis.title = element_text(size = 23, face = "bold",colour='#4D4E4F'),
+          text = element_text(size=15),axis.text =element_text(colour='#4D4E4F',size=20,face='bold'))+
+    coord_cartesian(ylim=c(0,4)) +
+    theme(axis.line=element_blank(),text = element_text(size=15))+ 
+    theme(axis.ticks.length = unit(.3, "cm"))+theme(aspect.ratio=0.9)+  labs(x = "Set size", y = "Ignore vs Update \n Indifference point")+theme(aspect.ratio=0.8)
+print(graph3)
+ggsave(file.path(exp1, 'COGED', "oriDir.pdf"), height=7.5,width=7.5)
+dev.off()
+
+
+graph6=ggplot(dirS2, aes(x = as.factor(setSize), y = ip, group=1)) + 
+  geom_line(size=1, colour='darkgreen')+geom_errorbar(aes(ymin=ip-se, ymax=ip+se), width = 0.06,size=0.95,colour='black')+#geom_point(size=2,colour='black',fill='white',shape=21,stroke=1.5)+
+theme_classic() +
+  geom_point(data=dir_long_2,aes(setSize,ip),position=pj,size=2.5,shape=1,alpha=0.3,colour='black')+   
+  geom_hline(aes(yintercept = 2),linetype='dashed',color='grey')+
+  geom_segment(x=1,xend=4.01,y=-0.2,yend=-0.2,color='black',size=0.73)+geom_segment(x=0.402,xend=0.402,y=0,yend=4,color='black',size=0.65)+
+      theme(axis.line = element_line(colour = 'dark grey', size = 1), axis.title = element_text(size = 23, face = "bold",colour='#4D4E4F'),
+          text = element_text(size=15),axis.text =element_text(colour='#4D4E4F',size=20,face='bold'))+
+    coord_cartesian(ylim=c(0,4)) +
+    theme(axis.line=element_blank(),text = element_text(size=15))+ 
+    theme(axis.ticks.length = unit(.3, "cm"))+theme(aspect.ratio=0.9)+  labs(x = "Set size", y = "Ignore vs Update \n Indifference point")+theme(aspect.ratio=0.8)
+print(graph6)
+ggsave(file.path(exp2, 'COGED', "repDir_no30.pdf"), height=7.5,width=7.5)
+
+```
+```{r split direct in two groups, echo=FALSE}
+
+ipdir1$experiment <- 1
+ipdir2$experiment <- 2
+
+ipdir <- rbind(ipdir1,ipdir2 %>% dplyr::filter(subNo != 30)) #combine two experiments
+write.csv(ipdir,file.path(pool_dir, 'direct_pooled_r.csv'), row.names = FALSE)
+
+ipdir$IPz <- scale(ipdir$IP, scale = T)
+ipdir <- ipdir %>% dplyr::mutate(outlier = case_when(IPz >= 2.9 | IPz <= -2.9 ~ 1, TRUE ~ 0))
+
+dir_long_1$experiment <- 1
+dir_long_2_ex$experiment <- 2
+
+dir_long <- rbind(dir_long_1,dir_long_2_ex) #combine two experiments long format of data
+
+pref_I <- ipdir %>% dplyr::filter(IP > 2) # & outlier == 0) #%>% dplyr::select(subNo) # subjects that prefer Ignore
+write.csv(pref_I,file.path(pool_dir, 'direct_prefer_ignore.csv'), row.names = FALSE)
+
+pref_U <- ipdir %>% dplyr::filter(IP < 2 )# & outlier == 0) #%>% dplyr::select(subNo) # subjects that prefer Update
+
+# summarize
+IPI <- summarySEwithin(dir_long %>% dplyr::filter(subNo %in% pref_I$subNo), measurevar="ip", withinvars=c("setSize"),idvar= c("subNo", 'experiment'))
+IPU <- summarySEwithin(dir_long %>% dplyr::filter(subNo %in% pref_U$subNo), measurevar="ip", withinvars=c("setSize"),idvar= c("subNo", 'experiment'))
+
+label_I <- sprintf("Prefer ignore (N = %d)",length(pref_I$subNo) )
+label_U <- sprintf("Prefer update (N = %d)",length(pref_U$subNo) )
+
+#two groups
+graph3=ggplot(data=IPI, aes(x = as.factor(setSize), y = ip, group=1,lty= label_I))  +
+    geom_errorbar(data=IPI,aes(ymin=ip-se, ymax=ip+se), width = 0.08,size=1.3)+geom_line(size=1.45)+geom_point(size=2, shape=21,stroke=1.2,color="black",fill='black')+ coord_cartesian(ylim=c(1, 3)) +
+    theme(axis.line.x = element_line(colour = 'black', size=0.5, linetype='solid'), axis.line.y = element_line(colour = 'black', size=0.5, linetype='solid'))+
+    geom_hline(aes(yintercept = 2),linetype='dashed',colour='grey')+
+    geom_segment(x=1,xend=4.01,y=0.9,yend=0.9,color='black',size=0.75)+geom_segment(x=0.402,xend=0.402,y=0.9999,yend=3,color='black',size=0.65)+ scale_linetype('Preference')+
+    geom_errorbar(data=IPU,aes(ymin=ip-se, ymax=ip+se), width = 0.08,size=1.3)+ geom_line(data=IPU, size=1.45,aes(lty=label_U))+
+    geom_point(data=IPU, size=1,stroke=1.5,shape=23,fill='white')+
+    theme(legend.text=element_text(size=20), legend.title=element_text(size=25))+theme_classic()+
+    theme(axis.title.y=element_text(margin=margin(0,34,0,0)))+  theme(axis.title.x=element_text(margin=margin(34,0,0)))+theme(axis.ticks.length = unit(.3, "cm"))+
+    theme(axis.line=element_blank(),text = element_text(size=20))+
+   labs(x = "Set size", y = "Ignore vs Update \n Indifference point") +
+  geom_text(label = 'Ignore preference', x = 1.5, y = 2.8, size = 5, colour = '#7F7377' )+
+  geom_text(label = 'Update preference', x = 1.5, y = 1.1, size = 5, colour = '#7F7377' )
+
+print(graph3)
+```
+Discounting parameters figures
+```{r discounting params}
+data_pb = read.csv(file=file.path(pool_dir, 'discParamsN.csv'),header=T,sep=',')
+##parameters
+
+disc_long <- data_pb %>% dplyr::rename(bias_I = biasI, bias_U = biasU) %>%
+    dplyr::select(c("sub", "kappa_I", "kappa_U", "beta_I", "beta_U", "bias_I", "bias_U")) %>%
+    pivot_longer(cols = -sub,
+                 names_to = c(".value", "condition"),
+                 names_sep = "_")
+
+##make summary statistics
+kappaS = summarySEwithin(disc_long, measurevar=c("kappa"), withinvar='condition',idvar="sub")
+betaS = summarySEwithin(disc_long, measurevar=c("beta"), withinvar='condition',idvar="sub")
+biasS = summarySEwithin(disc_long, measurevar=c("bias"), withinvar='condition',idvar="sub")
+
+##colors
+#purple, grey: "#999999"(grey), '#80002a (red dark),"#c2d6d6" (veraman), '#ffccdd, 9f8fcf (lilac),5552c2 (blue) "#1f676d", '#80002a'
+#"#E69F00"(orange), "#56B4E9"(light blue), "#009E73"(bright green), "#F0E442" (yellow), "#0072B2" (blue), "#D55E00" (red), 0b086a (dark blue)
+
+######discounting parameters####
+#kappa
+pd=position_dodge(w=0.15)
+p3=ggplot(kappaS, aes(y = kappa ,x = condition,group=1)) + #geom_point(size=3)+
+  geom_line(size=0.95)+
+  geom_errorbar(aes(ymin=kappa-se, ymax=kappa+se), width = 0.05,position = position_dodge( w =0.15),size=1)+
+theme_classic()+#ylim(c(0,0.75))+
+ labs(y = "Discounting parameter (k)",x='Condition')+
+  geom_jitter(data=disc_long,aes(condition,kappa,group=1),width = 0.05, alpha=0.2)+
+  theme(axis.title=element_text(face="bold",size=18))+
+  theme(axis.line = element_line(colour = 'black', size = 1.5),axis.ticks = element_line(colour = "black", size = 1.8),
+        text = element_text(size=18),axis.text =element_text(colour='#4D4E4F',size=18,face='bold'))
+
+#beta
+p4=ggplot(betaS, aes(y = beta ,x = condition,group=1)) + #geom_point(size=3)+
+  geom_line(size=0.95)+
+  geom_errorbar(aes(ymin=beta-se, ymax=beta+se), width = 0.05,position = position_dodge( w =0.15),size=1)+
+  theme_classic()+#ylim(c(0,8))+
+  labs(y = "Decision noise (inverse beta)",x='Condition')+
+  geom_jitter(data=disc_long,aes(condition,beta,group=1),width = 0.05, alpha=0.2)+
+  theme(axis.title=element_text(face="bold",size=18))+
+  theme(axis.line = element_line(colour = 'black', size = 1.5),axis.ticks = element_line(colour = "black", size = 1.8),
+        text = element_text(size=18),axis.text =element_text(colour='#4D4E4F',size=18,face='bold'))
+ggarrange(p3, p4,labels = c("A", "B") ,ncol = 2, nrow = 1)
+
+p5=ggplot(biasS, aes(y = bias ,x = condition,group=1)) + #geom_point(size=3)+
+  geom_line(size=0.95)+
+  geom_errorbar(aes(ymin=bias-se, ymax=bias+se), width = 0.05,position = position_dodge( w =0.15),size=1)+
+  theme_classic()+#ylim(c(0,8))+
+  labs(y = "Bias for effortful option",x='Condition')+
+  geom_jitter(data=disc_long,aes(condition,bias,group=1),width = 0.05, alpha=0.2)+
+  theme(axis.title=element_text(face="bold",size=18))+
+  theme(axis.line = element_line(colour = 'black', size = 1.5),axis.ticks = element_line(colour = "black", size = 1.8),
+        text = element_text(size=18),axis.text =element_text(colour='#4D4E4F',size=18,face='bold'))
+ggarrange(p3, p4, p5 , labels = c("A", "B", "C") ,ncol = 3, nrow = 1)
+
+
+```
+raw and simulated data
+```{r raw/sim data}
+#read data
+raw_data <- read.csv(file.path(pool_dir,'dataPooled.csv')) 
+fit_exp <- read.csv(file.path(sim_dir, 'exponential', 'IPmatrixOut.csv'),header = T)
+fit_lin <- read.csv(file.path(sim_dir, 'linear', 'IPmatrixOut.csv'),header = T)
+fit_par <- read.csv(file.path(sim_dir, 'parabolic', 'IPmatrixOut.csv'),header = T)
+fit_hyp <- read.csv(file.path(sim_dir, 'hyperbolic', 'IPmatrixOut.csv'),header = T)
+fit_exp_bias <- read.csv(file.path(sim_dir, 'exponential_bias', 'IPmatrixOut.csv'),header = T)
+fit_lin_bias <- read.csv(file.path(sim_dir, 'linear_bias', 'IPmatrixOut.csv'),header = T)
+fit_par_bias <- read.csv(file.path(sim_dir, 'parabolic_bias', 'IPmatrixOut.csv'),header = T)
+fit_hyp_bias <- read.csv(file.path(sim_dir, 'hyperbolic_bias', 'IPmatrixOut.csv'),header = T)
+
+if (mod_type == 'fmin'){
+fit_name <- 'discParamsN.csv'
+#simulated evidence
+ignore_of <- read.csv(file.path(pool_dir,'ignore_of_fmin.csv'))
+update_of <- read.csv(file.path(pool_dir,'update_of_fmin.csv'))
+
+}else {
+fit_name <- 'vbaParamsN.csv'
+#simulated evidence
+ignore_of <- read.csv(file.path(pool_dir,'ignore_of.csv'))
+update_of <- read.csv(file.path(pool_dir,'update_of.csv'))}
+
+
+
+#make naming consistent
+IP_raw <- raw_data[ ,c(1:3,9:16)]
+names(IP_raw) <- c('subNo','I','U', "I1","I2","I3","I4","U1","U2","U3","U4") 
+
+#model that generated data
+fit_par$genMod <- 'parabolic'
+fit_lin$genMod <- 'linear'
+fit_hyp$genMod <- 'hyperbolic'
+fit_exp$genMod <- 'exponential'
+fit_par_bias$genMod <- 'parabolic_bias'
+fit_lin_bias$genMod <- 'linear_bias'
+fit_hyp_bias$genMod <- 'hyperbolic_bias'
+fit_exp_bias$genMod <- 'exponential_bias'
+IP_raw$genMod <- 'data'
+
+
+#join all simulated data
+all_fits <- rbind(fit_lin, fit_par, fit_hyp, fit_exp,fit_lin_bias, fit_par_bias, fit_hyp_bias, fit_exp_bias)
+# raw data or sims
+all_fits$type <- 'model'
+IP_raw$type <- 'data'
+
+
+#bind raw and simulated 
+IP_all <- rbind(all_fits, IP_raw)
+# unique subject number for every row (simulated and real participants)
+IP_all$subNo <- 1:nrow(IP_all)
+
+
+fitsLong=reshape(IP_all,varying =c( "I1","I2","I3","I4","U1","U2","U3","U4"),direction = "long",idvar = "subNo",timevar="setSize",sep="")
+fits_data=reshape2:::melt.data.frame(fitsLong,id.vars=c('subNo','setSize','genMod','type'),value.name="IP",variable.name="condition",measure.vars=c("I","U"))
+
+IP_raw_sum <- summarySEwithin(fits_data[fits_data$type=='data', ], measurevar = "IP", withinvars = c("setSize","condition"),idvar="subNo")
+
+IP_fit_sum <- summarySEwithin(fits_data, measurevar = "IP", withinvars = c("setSize","condition"), betweenvars = c('genMod','type'),idvar="subNo")
+```
+Correlations with performance
+```{r correlations}
+
+raw_data$IPIminusIPU=raw_data$IP_ignore-raw_data$IP_update
+#choose raw_data of only experiment 2 (replication)
+DataRep=raw_data[raw_data$subNo<100, ]
+#choose data of only experiment 1
+DataOr=raw_data[raw_data$subNo>99, ]
+
+
+p3=ggplot(DataOr, aes(y = IPIminusIPU,x= devI_devU,)) + 
+  geom_point(size=2)+
+  geom_smooth(method=lm,size=2)
+
+p3+ theme_classic()+
+  font("ylab", size = 30,face='bold') + font("xlab", size = 30,face='bold') +
+  labs(x = "Subjective value Ignore - Update (IP)", y = "Deviance Ignore - Update (degrees)")+
+  theme(axis.line = element_line(colour = 'black', size = 1.5),axis.ticks = element_line(colour = "black", size = 1.8),
+        text = element_text(size=20),axis.text =element_text(colour='#4D4E4F',size=28,face='bold'))
+
+ggsave("correlationMixedPooled.pdf", height=6,width=9)
+
+dev.off()
+
+p3=ggplot(raw_data, aes(y = devI4_devU4,x = IPtask)) + 
+  geom_point(size=2)+
+  geom_smooth(method=lm,size=2)+theme_classic()+
+  labs( x = "Subjective value (IP)", y = expression(atop(paste(Delta, "Deviance (Ignore -  Update)"),paste("in highest demand (degrees)"))))+
+  theme(axis.line = element_line(colour = 'black', size = 1.5),axis.ticks = element_line(colour = "black", size = 1.8),
+        text = element_text(size=20),axis.text =element_text(colour='#4D4E4F',size=20,face='bold'))+
+annotate("segment", x = 0.3,xend=0.3, y = -29, yend = -10, colour = "black", size=1, alpha=0.6, arrow=arrow())+
+  annotate(geom = "text", x = 0.48, y = -22, label = "More stability/ less flexibility", hjust = "left")
+
+p4=ggplot(raw_data, aes(y=devI4_devU4,x=kappa))+
+            geom_point(size=2)+
+            geom_smooth(method=lm,size=2)+ theme_classic()+
+            labs( x = "Discounting parameter (k)")+ylab("")+#, y = "??Deviance (Ignore -  Update) \n in highest demand (degrees)")+
+            theme(axis.line = element_line(colour = 'black', size = 1.5),axis.ticks = element_line(colour = "black", size = 1.8),
+                  text = element_text(size=20),axis.text =element_text(colour='#4D4E4F',size=20,face='bold'))
+          
+          require(gridExtra)
+
+  ggarrange(p3, p4,labels = c("A", "B") ,ncol = 2, nrow = 1)
+          
+          ggsave(filename=file.path(pool_dir,"correlationsIPKappa.pdf",fsep='\\'),
+                 height=5, width=10, units="in", dpi=500)
+          
+          dev.off()
+          
+```
+correlation by set size
+```{r correlations by set size}
+
+ip_long <-  raw_data %>% dplyr::select(subNo,matches("^IP_[IU][1-4]$") ) %>% pivot_longer(cols = -subNo, names_to = c('condition', 'setSize'),  names_pattern ="IP_([IU])(\\d+)", values_to = "IP") 
+
+dev_long <- raw_data %>% dplyr::select(subNo, matches("^dev[IU][1-4]$")) %>% pivot_longer(cols = -subNo, names_to = c('condition', 'setSize'),  names_pattern ="dev([IU])(\\d+)", values_to = "dev") 
+
+raw_long <- inner_join(ip_long, dev_long, by = c('subNo', 'setSize', 'condition'))
+
+raw_data_m <- raw_data %>% dplyr::mutate (devI1_U1 = devI1 - devU1, devI2_U2 = devI2 - devU2,devI3_U3 = devI3 - devU3,devI4_U4 = devI4 - devU4) 
+
+cor_iu_1 <- cor.test(raw_data_m$IPtask, raw_data_m$devI1_U1, method="kendall")
+
+
+iu_long <- raw_data_m %>% dplyr::select(subNo,IPtask, matches("^devI[1-4]_U[1-4]")) %>% pivot_longer(cols = -c(subNo, IPtask), names_to = 'setSize',  names_pattern = 'devI[1-4]_U(.*)$' , values_to = 'cond_diff')
+
+iu_long_high <- iu_long %>% filter(setSize >=3)
+
+iu_long_high$setSize <- factor(iu_long_high$setSize, levels = c(3:4),labels = c('Set size 3', 'Set size 4'))
+
+dev_ip_long <- left_join(ip_long, dev_long, by= c('subNo', 'condition', 'setSize'))
+dev_ip_wide <- dev_ip_long %>% pivot_wider(names_from = condition, values_from = c(IP, dev))
+
+dev_ip_diff <- dev_ip_wide %>%
+  dplyr::mutate(
+    IP_diff = IP_I - IP_U,
+    dev_diff = dev_I - dev_U
+  ) %>%
+  dplyr::select(subNo, setSize, IP_diff, dev_diff)
+
+
+BFs <- c(0.154, 0.160, 0.175, 0.296)
+
+dev_ip_diff <- dev_ip_diff %>% dplyr::mutate(bf = dplyr::case_when(setSize == 1 ~ BFs[1], setSize == 2 ~ BFs[2], setSize == 3 ~ BFs[3],  TRUE ~ BFs[4]))
+
+dev_ip_diff$setSize <- factor(dev_ip_diff$setSize, levels = c(1:4),labels = c('Set size 1', 'Set size 2', 'Set size 3', 'Set size 4'))
+
+cor_results <- dev_ip_diff %>%
+         dplyr::group_by(setSize) %>% dplyr::summarize(
+                 r = cor(IP_diff, dev_diff, method = 'kendall'),
+                 p = cor.test(IP_diff, dev_diff, method = 'kendall')$p.value
+             )
+ cor_results$BF <- BFs
+
+#choice deviance relationship
+ggplot(dev_ip_diff, aes(y = IP_diff,x = dev_diff)) + 
+    geom_point(size=2)+
+    geom_smooth(method=lm,size=2)+theme_classic()+
+    labs( y = expression(paste(Delta, "Motivation (Ignore -  Update)")), x = expression(paste(Delta, "Deviance (Ignore -  Update)")))+
+    theme(axis.line = element_line(colour = 'black', size = 1.5),axis.ticks = element_line(colour = "black", size = 1.8),
+          text = element_text(size=20),axis.text =element_text(colour='#4D4E4F',size=20,face='bold'))+
+    facet_wrap(~setSize, nrow = 1, scales = 'free')+
+    geom_text(data = cor_results, aes(fontface = 3,label = sprintf('R = %.3f, p = %.3f, BF = %.3f', r, p, BF)), 
+             y = c(0.2, -1, 0.5,  -1.1), x = c(1, 2, 25, 7), size = 4, inherit.aes = FALSE)
+
+
+#explorative correlation
+ggplot(iu_long_high, aes(y = cond_diff,x = IPtask)) + 
+  geom_point(size=2)+
+  geom_smooth(method=lm,size=2)+theme_classic()+
+    labs( x = "Motivation for effort vs break (IP)", y = expression(paste(Delta, "Deviance (Ignore -  Update)")))+
+    theme(axis.line = element_line(colour = 'black', size = 1.5),axis.ticks = element_line(colour = "black", size = 1.8),
+          text = element_text(size=20),axis.text =element_text(colour='#4D4E4F',size=20,face='bold'))+
+    annotate("segment", x = 0.3,xend=0.3, y = 25, yend = 50, colour = "black", size=1, alpha=0.6, arrow=arrow())+
+    annotate(geom = "text", x = 0.48, y = 50, label = "Higher distractibility vs flexibility", hjust = "left")+ facet_wrap(~setSize, nrow = 1)+
+    stat_cor( method = 'kendall', label.y.npc = 'bottom' , label.x.npc = 'right')
+
+
+```
+plot raw/fitted
+```{r raw/fitted plots}
+pd=position_dodge(w=0.15)
+
+
+IP_fit_sum2 <- IP_fit_sum[IP_fit_sum$type== 'data' | IP_fit_sum$genMod== 'hyperbolic',]
+
+graph0=ggplot(IP_fit_sum2, aes(x = factor(setSize), y = IP, color= condition, linetype=type, group = paste(type, condition))) + geom_line(position = position_dodge( w =0.15),size=1)  +
+geom_errorbar(aes(ymin=IP-se, ymax=IP+se), width = 0.12,position = position_dodge( w =0.15),size=1.5)+
+  scale_color_manual(labels=c("Ignore", "Update"),name="Condition",values = c('#004CBF',"#E90066" ))+
+  labs(y = "Simulated vs fitted \n ndifference point (IP)",x='Set size', title = 'hyperbolic')+theme_classic()+
+  theme(axis.title=element_text(face="bold",size=12))+
+  theme(axis.line = element_line(colour = 'black', size = 1.5),axis.ticks = element_line(colour = "black", size = 1.8),
+        text = element_text(size=12),axis.text =element_text(colour='#4D4E4F',size=12,face='bold'))
+
+
+IP_fit_sum3 <- IP_fit_sum[IP_fit_sum$type== 'data' | IP_fit_sum$genMod== 'linear',]
+
+graph1=ggplot(IP_fit_sum3, aes(x = factor(setSize), y = IP, color= condition, linetype=type, group = paste(type, condition))) + geom_line(position = position_dodge( w =0.15),size=1)  +
+geom_errorbar(aes(ymin=IP-se, ymax=IP+se), width = 0.12,position = position_dodge( w =0.15),size=1.5)+
+  scale_color_manual(labels=c("Ignore", "Update"),name="Condition",values = c('#004CBF',"#E90066" ))+
+  labs(y = "Simulated vs fitted \n ndifference point (IP)",x='Set size',title = 'linear')+theme_classic()+
+  theme(axis.title=element_text(face="bold",size=12))+
+  theme(axis.line = element_line(colour = 'black', size = 1.5),axis.ticks = element_line(colour = "black", size = 1.8),
+        text = element_text(size=12),axis.text =element_text(colour='#4D4E4F',size=12,face='bold'))
+
+IP_fit_sum4 <- IP_fit_sum[IP_fit_sum$type== 'data' | IP_fit_sum$genMod== 'parabolic',]
+
+graph2=ggplot(IP_fit_sum4, aes(x = factor(setSize), y = IP, color= condition, linetype=type, group = paste(type, condition))) + geom_line(position = position_dodge( w =0.15),size=1)  +
+geom_errorbar(aes(ymin=IP-se, ymax=IP+se), width = 0.12,position = position_dodge( w =0.15),size=1.5)+
+  scale_color_manual(labels=c("Ignore", "Update"),name="Condition",values = c('#004CBF',"#E90066" ))+
+  labs(y = "Simulated vs fitted \n ndifference point (IP)",x='Set size', title = 'parabolic')+theme_classic()+
+  theme(axis.title=element_text(face="bold",size=12))+ 
+  theme(axis.line = element_line(colour = 'black', size = 1.5),axis.ticks = element_line(colour = "black", size = 1.8),
+        text = element_text(size=12),axis.text =element_text(colour='#4D4E4F',size=12,face='bold'))
+
+IP_fit_sum5 <- IP_fit_sum[IP_fit_sum$type== 'data' | IP_fit_sum$genMod== 'exponential',]
+
+graph3=ggplot(IP_fit_sum5, aes(x = factor(setSize), y = IP, color= condition, linetype=type, group = paste(type, condition))) + geom_line(position = position_dodge( w =0.15),size=1)  +
+geom_errorbar(aes(ymin=IP-se, ymax=IP+se), width = 0.12,position = position_dodge( w =0.15),size=1.5)+
+  scale_color_manual(labels=c("Ignore", "Update"),name="Condition",values = c('#004CBF',"#E90066" ))+
+  labs(y = "Simulated vs fitted \n ndifference point (IP)",x='Set size', title = 'exponential')+theme_classic()+
+  theme(axis.title=element_text(face="bold",size=12))+
+  theme(axis.line = element_line(colour = 'black', size = 1.5),axis.ticks = element_line(colour = "black", size = 1.8),
+        text = element_text(size=12),axis.text =element_text(colour='#4D4E4F',size=12,face='bold'))
+
+IP_fit_sum6 <- IP_fit_sum[IP_fit_sum$type== 'data' | IP_fit_sum$genMod== 'hyperbolic_bias',]
+
+graph4=ggplot(IP_fit_sum6, aes(x = factor(setSize), y = IP, color= condition, linetype=type, group = paste(type, condition))) + geom_line(position = position_dodge( w =0.15),size=1)  +
+geom_errorbar(aes(ymin=IP-se, ymax=IP+se), width = 0.12,position = position_dodge( w =0.15),size=1.5)+
+  scale_color_manual(labels=c("Ignore", "Update"),name="Condition",values = c('#004CBF',"#E90066" ))+
+  labs(y = "Simulated vs fitted \n ndifference point (IP)",x='Set size', title = 'hyperbolic (incl. bias)')+theme_classic()+
+  theme(axis.title=element_text(face="bold",size=12))+
+  theme(axis.line = element_line(colour = 'black', size = 1.5),axis.ticks = element_line(colour = "black", size = 1.8),
+        text = element_text(size=12),axis.text =element_text(colour='#4D4E4F',size=12,face='bold'))
+
+
+IP_fit_sum7 <- IP_fit_sum[IP_fit_sum$type== 'data' | IP_fit_sum$genMod== 'linear_bias',]
+
+graph5=ggplot(IP_fit_sum7, aes(x = factor(setSize), y = IP, color= condition, linetype=type, group = paste(type, condition))) + geom_line(position = position_dodge( w =0.15),size=1)  +
+geom_errorbar(aes(ymin=IP-se, ymax=IP+se), width = 0.12,position = position_dodge( w =0.15),size=1.5)+
+  scale_color_manual(labels=c("Ignore", "Update"),name="Condition",values = c('#004CBF',"#E90066" ))+
+  labs(y = "Simulated vs fitted \n ndifference point (IP)",x='Set size',title = 'linear (incl. bias)')+theme_classic()+
+  theme(axis.title=element_text(face="bold",size=12))+
+  theme(axis.line = element_line(colour = 'black', size = 1.5),axis.ticks = element_line(colour = "black", size = 1.8),
+        text = element_text(size=12),axis.text =element_text(colour='#4D4E4F',size=12,face='bold'))
+
+IP_fit_sum8 <- IP_fit_sum[IP_fit_sum$type== 'data' | IP_fit_sum$genMod== 'parabolic_bias',]
+
+graph6=ggplot(IP_fit_sum8, aes(x = factor(setSize), y = IP, color= condition, linetype=type, group = paste(type, condition))) + geom_line(position = position_dodge( w =0.15),size=1)  +
+geom_errorbar(aes(ymin=IP-se, ymax=IP+se), width = 0.12,position = position_dodge( w =0.15),size=1.5)+
+  scale_color_manual(labels=c("Ignore", "Update"),name="Condition",values = c('#004CBF',"#E90066" ))+
+  labs(y = "Simulated vs fitted \n ndifference point (IP)",x='Set size', title = 'parabolic (incl. bias)')+theme_classic()+
+  theme(axis.title=element_text(face="bold",size=12))+ 
+  theme(axis.line = element_line(colour = 'black', size = 1.5),axis.ticks = element_line(colour = "black", size = 1.8),
+        text = element_text(size=12),axis.text =element_text(colour='#4D4E4F',size=12,face='bold'))
+
+IP_fit_sum9 <- IP_fit_sum[IP_fit_sum$type== 'data' | IP_fit_sum$genMod== 'exponential_bias',]
+
+graph7=ggplot(IP_fit_sum9, aes(x = factor(setSize), y = IP, color= condition, linetype=type, group = paste(type, condition))) + geom_line(position = position_dodge( w =0.15),size=1)  +
+geom_errorbar(aes(ymin=IP-se, ymax=IP+se), width = 0.12,position = position_dodge( w =0.15),size=1.5)+
+  scale_color_manual(labels=c("Ignore", "Update"),name="Condition",values = c('#004CBF',"#E90066" ))+
+  labs(y = "Simulated vs fitted \n ndifference point (IP)",x='Set size', title = 'exponential (incl. bias)')+theme_classic()+
+  theme(axis.title=element_text(face="bold",size=12))+
+  theme(axis.line = element_line(colour = 'black', size = 1.5),axis.ticks = element_line(colour = "black", size = 1.8),
+        text = element_text(size=12),axis.text =element_text(colour='#4D4E4F',size=12,face='bold'))
+
+#save plot
+
+ require(ggpubr)
+
+  ggarrange(graph0, graph1,graph2, graph3, graph4, graph5, graph6,graph7, ncol = 4, nrow = 2,common.legend = T)
+```
+
+Parameter recovery
+```{r parameter recovery}
+#Prepare data
+params_par <- read.csv(file.path(sim_dir, 'parabolic', fit_name),header = T)
+params_lin <- read.csv(file.path(sim_dir, 'linear', fit_name),header = T)
+params_hyp <- read.csv(file.path(sim_dir, 'hyperbolic', fit_name),header = T)
+params_exp <- read.csv(file.path(sim_dir, 'exponential', fit_name),header = T)
+params_par_bias <- read.csv(file.path(sim_dir, 'parabolic_bias', fit_name),header = T)
+params_lin_bias <- read.csv(file.path(sim_dir, 'linear_bias', fit_name),header = T)
+params_hyp_bias <- read.csv(file.path(sim_dir, 'hyperbolic_bias', fit_name),header = T)
+params_exp_bias <- read.csv(file.path(sim_dir, 'exponential_bias', fit_name),header = T)
+if (mod_type == 'fmin'){
+fit_params <- read.csv(file.path(results_dir, 'Pooled','fitted_params.csv'))
+} else {
+fit_params <- read.csv(file.path(results_dir, 'Pooled','fit_params_vba.csv'))}
+
+
+#model that generated data
+params_par$genMod <- 'par'
+params_lin$genMod <- 'lin'
+params_hyp$genMod <- 'hyp'
+params_exp$genMod <- 'exp'
+params_par_bias$genMod <- 'par_bias'
+params_lin_bias$genMod <- 'lin_bias'
+params_hyp_bias$genMod <- 'hyp_bias'
+params_exp_bias$genMod <- 'exp_bias'
+
+num_sims <- 100 #number of simulations
+rep_fit <- do.call("rbind", replicate(num_sims, fit_params, simplify = FALSE)) #replicate by number of simulations
+
+sim_params <- dplyr::bind_rows(params_exp,params_hyp,params_lin,params_par,params_exp_bias,params_hyp_bias,params_lin_bias,params_par_bias)
+
+sim_params_bias <-  sim_params %>% dplyr::filter(grepl('bias',genMod))
+```
+
+```{r parameter recovery ku}
+
+### KAPPA UPDATE ####
+kU_all <- rep_fit  %>%  dplyr::select(starts_with('kU_'))
+kU_long <- kU_all %>% pivot_longer( cols = starts_with("kU_"), names_to = "genMod", names_prefix = "kU_", values_to = "fit_kappa") 
+kU_long <- kU_long %>% arrange(genMod)
+kU_long$sim_kappa <- sim_params$kappa_U
+
+
+range <- c(0,10)
+
+pkU <- ggscatter(kU_long, y = 'sim_kappa',x = 'fit_kappa', color = "grey",alpha = 0.3, fill = "light grey",
+               shape = 19, size = 2,
+               add = "reg.line", conf.int = TRUE,  add.params = list(color = "black",
+                                                                     fill = "grey",alpha = 0.4),
+               cor.coef = TRUE, cor.method = "pearson",label.x = 5, label.y = 'bottom',
+               ylab = "Simulated", xlab = "Fitted") + facet_wrap(~genMod, ncol = 4,scales = 'free')+
+  font("xlab", size = 16) + font("ylab", size = 16)
+pkU
+```
+
+```{r parameter recovery ki}
+cons=1
+kI_all <- rep_fit  %>%  dplyr::select(starts_with('kI_'))
+kI_long <- kI_all %>% pivot_longer( cols = starts_with("kI_"), names_to = "genMod", names_prefix = "kI_", values_to = "fit_kappa") 
+kI_long <- kI_long %>% arrange(genMod)
+kI_long$sim_kappa <- sim_params$kappa_I
+
+range <- c(0,cons)
+mod_names <- unique(sim_params$genMod)
+k <- c()
+
+for (modNo in 1:length(mod_names)){
+  mod <- mod_names[modNo]
+k <- c(k,corPlot(kI_long %>% filter(genMod==mod)))
+}
+
+pkI <- ggscatter(kI_long, y = 'sim_kappa',x = 'fit_kappa', color = "grey",alpha = 0.3, fill = "light grey",
+               shape = 19, size = 2,
+               add = "reg.line", conf.int = TRUE,  add.params = list(color = "blue",
+                                                                     fill = "grey",alpha = 0.4),
+               cor.coef = TRUE, cor.method = "pearson", col= 'red',# label.x = 0.2, label.y = 0.8,
+               ylab = "Simulated", xlab = "Fitted") + facet_wrap(~genMod, ncol = 4, scales = 'free')+
+  font("xlab", size = 16) + font("ylab", size = 16)
+pkI
+```
+
+```{r parameter recovery bU}
+
+### BETA UPDATE ####
+bU_all <- rep_fit  %>%  dplyr::select(starts_with('bU'))
+bU_long <- bU_all %>% pivot_longer( cols = starts_with("bU_"), names_to = "genMod", names_prefix = "bU_", values_to = "fit_beta") 
+bU_long <- bU_long %>% arrange(genMod)
+bU_long$sim_beta <- sim_params$beta_U
+
+range <- c(0,20)
+
+pbU <- ggscatter(bU_long, y = 'sim_beta',x = 'fit_beta', color = "grey",alpha = 0.5, fill = "light grey",
+               shape = 19, size = 2,
+               add = "reg.line", conf.int = TRUE,  add.params = list(color = "black",
+                                                                     fill = "grey",alpha = 0.4),
+               cor.coef = TRUE, cor.method = "pearson",# label.x = 0.2, label.y = 0.8,
+               ylab = "Simulated", xlab = "Fitted") + facet_wrap(~genMod, ncol = 4, scales = 'free')+
+  font("xlab", size = 16) + font("ylab", size = 16)
+pbU
+```
+
+```{r parameter recovery bI}
+
+### BETA IGNORE ####
+bI_all <- rep_fit  %>% dplyr:: select(starts_with('bI_'))
+bI_long <- bI_all %>% pivot_longer( cols = starts_with("bI_"), names_to = "genMod", names_prefix = "bI_", values_to = "fit_beta") 
+bI_long <- bI_long %>% arrange(genMod)
+bI_long$sim_beta <- sim_params$beta_I
+
+range <- c(0,10)
+
+pbI <- ggscatter(bI_long, y = 'sim_beta',x = 'fit_beta', color = "grey",alpha = 0.3, fill = "light grey",
+               shape = 19, size = 2,
+               add = "reg.line", conf.int = TRUE,  add.params = list(color = "blue",
+                                                                     fill = "grey",alpha = 0.4),
+               cor.coef = TRUE, cor.method = "kendall", col= 'red',# label.x = 0.2, label.y = 0.8,
+               ylab = "Simulated", xlab = "Fitted") + facet_wrap(~genMod, ncol = 4, scales = 'free')+
+  font("xlab", size = 16) + font("ylab", size = 16)
+pbI
+## density plot
+ggplot(data=bI_long, aes(x=sim_beta, group=genMod, color= genMod, fill=genMod)) +
+    geom_density(adjust=1.5, alpha=.2)+ theme_classic2()
+  pbI
+
+
+```
+all correlations
+
+```{r parameter recovery biasU }
+
+### bias update ####
+biasU_all <- rep_fit  %>%  dplyr::select(starts_with('biasU'))
+biasU_long <- biasU_all %>% pivot_longer( cols = starts_with("biasU_"), names_to = "genMod", names_prefix = "biasU_", values_to = "fit_bias") 
+biasU_long <- biasU_long %>% arrange(genMod) %>% dplyr::mutate(sim_bias = sim_params_bias$biasU)
+
+range <- c(0,20)
+
+pbiasU <- ggscatter(biasU_long, y = 'sim_bias',x = 'fit_bias', color = "grey",alpha = 0.5, fill = "light grey",
+               shape = 19, size = 2,
+               add = "reg.line", conf.int = TRUE,  add.params = list(color = "black",
+                                                                     fill = "grey",alpha = 0.4),
+               cor.coef = TRUE, cor.method = "pearson",# label.x = 0.2, label.y = 0.8,
+               ylab = "Simulated", xlab = "Fitted") + facet_wrap(~genMod, ncol = 4, scales = 'free')+
+  font("xlab", size = 16) + font("ylab", size = 16)
+pbiasU
+
+```
+```{r parameter recovery bias Ignore}
+
+### bias ignore ####
+biasI_all <- rep_fit  %>%  dplyr::select(starts_with('biasI'))
+biasI_long <- biasI_all %>% pivot_longer( cols = starts_with("biasI_"), names_to = "genMod", names_prefix = "biasI_", values_to = "fit_bias") 
+biasI_long <- biasI_long %>% arrange(genMod) %>% dplyr::mutate(sim_bias = sim_params_bias$biasI)
+
+range <- c(0,20)
+
+pbiasI <- ggscatter(biasI_long, y = 'sim_bias',x = 'fit_bias', color = "grey",alpha = 0.5, fill = "light grey",
+               shape = 19, size = 2,
+               add = "reg.line", conf.int = TRUE,  add.params = list(color = "blue",
+                                                                     fill = "grey",alpha = 0.4),
+               cor.coef = TRUE, cor.method = "pearson",# label.x = 0.2, label.y = 0.8,
+               ylab = "Simulated", xlab = "Fitted") + facet_wrap(~genMod, ncol = 4, scales = 'free')+
+  font("xlab", size = 16) + font("ylab", size = 16)
+pbiasI
+
+```
+```{r plot all parameter recovery correlations}
+  ggarrange(pbI, pbU,pkI, pkU, pbiasI, pbiasU,common.legend = T)
+
+```
+confusion matrix
+
+

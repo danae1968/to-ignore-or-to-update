@@ -1,0 +1,47 @@
+# Manuscripts, slides and figures
+*.pdf
+*.ai
+*.png
+*.jpg
+*.jpeg
+*.bmp
+*.gif
+*.tif
+*.pptx
+*.docx
+*.fig
+
+# Editor, MATLAB, R and OS clutter
+*.asv
+*.m~
+.Rhistory
+.RData
+.Rproj.user/
+Thumbs.db
+desktop.ini
+*.tmp
+
+# Third-party toolboxes, installed separately (see README)
+VBA-toolbox*/
+analysis/jv10/readme_files/
+
+# Knitted R Markdown output
+analysis/*.html
+analysis/*.md
+analysis/*_files/
+
+# Large or regenerated analysis outputs (re-create with analysis/CW_analysis.m and the R scripts)
+derivatives/**/*.mat
+derivatives/**/*.RData
+derivatives/**/old/
+
+# Simulation outputs: only keep the files used by colorwheel_plots.Rmd
+derivatives/Pooled/simulations_vba/
+derivatives/Pooled/simulations/**/*.*
+!derivatives/Pooled/simulations/*/IPmatrixOut.csv
+!derivatives/Pooled/simulations/*/discParamsN.csv
+
+# Output of the exploratory VBA models (analysis/fit_discounting_models_cw.m)
+derivatives/Pooled/fit_params_vba.*
+derivatives/Pooled/ignore_of.csv
+derivatives/Pooled/update_of.csv
